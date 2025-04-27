@@ -1,82 +1,62 @@
+require('dotenv').config();
 const WebSocket = require('ws');
 const axios = require('axios');
-require('dotenv').config();
 
-const GATE_WS_URL = 'wss://api.gateio.ws/ws/v4/';
-const MIN_TRADE_AMOUNT = 50000; // 50,000 KOII minimum for whale alert
+const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
+const MIN_TRADE_AMOUNT = 10000; // 50k KOII
+const TEST_MODE = process.env.TEST_MODE === 'true';
 
-const ws = new WebSocket(GATE_WS_URL);
+const ws = new WebSocket('wss://api.gateio.ws/ws/v4/');
 
-ws.on('open', () => {
+ws.on('open', function open() {
   console.log('Subscribed to KOII/USDT trades');
-
-  const subscribeMessage = {
+  ws.send(JSON.stringify({
     time: Date.now(),
-    channel: "spot.trades",
-    event: "subscribe",
-    payload: ["KOII_USDT"]
-  };
+    channel: 'spot.trades',
+    event: 'subscribe',
+    payload: ['KOII_USDT']
+  }));
 
-  ws.send(JSON.stringify(subscribeMessage));
-
-  if (process.env.TEST_MODE === 'true') {
-    sendTestAlert();
+  if (TEST_MODE) {
+    sendDiscordMessage({
+      side: 'buy',
+      amount: 123456,
+      price: 0.042,
+    });
   }
 });
 
 ws.on('message', async function incoming(data) {
-  const tradeData = JSON.parse(data);
+  try {
+    const tradeData = JSON.parse(data);
+    console.log('Received Trade Data:', JSON.stringify(tradeData, null, 2)); // LOGGING
 
-  if (tradeData.event === 'update' && tradeData.channel === 'spot.trades') {
+    if (tradeData.event !== 'update' || !tradeData.result) return;
+
     const trades = tradeData.result;
     const tradeList = Array.isArray(trades) ? trades : [trades];
 
     tradeList.forEach(async (trade) => {
       const amount = parseFloat(trade.amount);
-      const price = parseFloat(trade.price);
-      const totalValue = amount * price;
-
       if (amount >= MIN_TRADE_AMOUNT) {
-        const message = {
-          content: `🚨 **KOII Buy Alert!** 🚨\n` +
-                   `🐋 **Trade Detected!**\n` +
-                   `📈 **Amount:** ${amount.toLocaleString()} KOII\n` +
-                   `💵 **Price:** $${price}\n` +
-                   `🔥 **Total Value:** $${totalValue.toFixed(2)}\n` +
-                   `🏦 **Exchange:** Gate.io\n` +
-                   `⏰ **Time:** ${new Date().toUTCString()}`
-        };
-
-        try {
-          await axios.post(process.env.DISCORD_WEBHOOK_URL, message);
-          console.log('Whale alert sent to Discord.');
-        } catch (error) {
-          console.error('Error sending alert to Discord:', error.response ? error.response.data : error.message);
-        }
+        await sendDiscordMessage(trade);
       }
     });
+  } catch (error) {
+    console.error('Error handling message:', error);
   }
 });
 
-async function sendTestAlert() {
-  const amount = 99999;
-  const price = 0.05;
-  const totalValue = amount * price;
-
-  const message = {
-    content: `🚨 **KOII Whale Alert (TEST)** 🚨\n` +
-             `🐋 **Whale Trade Detected!**\n` +
-             `📈 **Amount:** ${amount.toLocaleString()} KOII\n` +
-             `💵 **Price:** $${price}\n` +
-             `🔥 **Total Value:** $${totalValue.toFixed(2)}\n` +
-             `🏦 **Exchange:** Gate.io (Simulated)\n` +
-             `⏰ **Time:** ${new Date().toUTCString()}`
-  };
+async function sendDiscordMessage(trade) {
+  const sideEmoji = trade.side === 'buy' ? '🟢' : '🔴';
+  const content = `${sideEmoji} **${trade.side.toUpperCase()}** ${trade.amount} KOII at $${trade.price}`;
 
   try {
-    await axios.post(process.env.DISCORD_WEBHOOK_URL, message);
-    console.log('✅ Test whale alert sent to Discord.');
+    await axios.post(DISCORD_WEBHOOK_URL, {
+      content: content,
+    });
+    console.log('Sent Discord Alert:', content);
   } catch (error) {
-    console.error('Error sending test alert:', error.response ? error.response.data : error.message);
+    console.error('Error sending Discord message:', error);
   }
 }
