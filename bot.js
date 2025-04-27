@@ -38,8 +38,8 @@ ws.on('message', async function incoming(data) {
 
       if (amount >= MIN_TRADE_AMOUNT) {
         const message = {
-          content: `🚨 **KOII Whale Alert!** 🚨\n` +
-                   `🐋 **Whale Trade Detected!**\n` +
+          content: `🚨 **KOII Buy Alert!** 🚨\n` +
+                   `🐋 **Trade Detected!**\n` +
                    `📈 **Amount:** ${amount.toLocaleString()} KOII\n` +
                    `💵 **Price:** $${price}\n` +
                    `🔥 **Total Value:** $${totalValue.toFixed(2)}\n` +
