@@ -48,8 +48,20 @@ ws.on('message', async function incoming(data) {
 });
 
 async function sendDiscordMessage(trade) {
-  const sideEmoji = trade.side === 'buy' ? '🟢' : '🔴';
-  const content = `${sideEmoji} **${trade.side.toUpperCase()}** ${trade.amount} KOII at $${trade.price}`;
+  if (trade.side !== 'buy') return; // Ignore sells!
+
+  const amount = parseFloat(trade.amount);
+  const price = parseFloat(trade.price);
+  const totalValue = amount * price;
+
+  const content = 
+    `🚨 **KOII Whale Alert${TEST_MODE ? ' (TEST)' : ''}** 🚨\n` +
+    `🐋 **Whale Trade Detected!**\n` +
+    `📈 **Amount:** ${amount.toLocaleString()} KOII\n` +
+    `💵 **Price:** $${price}\n` +
+    `🔥 **Total Value:** $${totalValue.toFixed(2)}\n` +
+    `🏦 **Exchange:** Gate.io\n` +
+    `⏰ **Time:** ${new Date().toUTCString()}`;
 
   try {
     await axios.post(DISCORD_WEBHOOK_URL, {
@@ -60,3 +72,4 @@ async function sendDiscordMessage(trade) {
     console.error('Error sending Discord message:', error);
   }
 }
+
